@@ -12,8 +12,9 @@ import pandas as pd
 import numpy as np
 from Bio import SeqIO # Need BIOPYTHON SEQ/IO
 
-class Target : 
+class Target :
     def __init__(self, name, tag, start, end, color, length) :
+        """ """
         self.name = name
         self.tag = tag
         self.start = start
@@ -21,7 +22,24 @@ class Target :
         self.color = color
         self.length = length
 
+    def __str__(self) :
+        return "Target(name={}, tag={}, start={}, end={}, color={}, length={})".format(self.name,self.tag,self.start,self.end,self.color,self.length)
+
+class Coords :
+    def __init__(self, name_1, name_2, start_1, start_2, end_1, end_2) :
+        """ """
+        self.n1 = name_1
+        self.s1 = start_1
+        self.e1 = end_1
+        self.n2 = name_2
+        self.s2 = start_2
+        self.e2 = end_2
+
+    def __eq__(self, co) :
+        return (self.n1 == co.n1 or self.n1 == co.n2) and (self.s1 == co.s1 or self.s1 == co.s2) and (self.e1 == co.e1 or self.e1 == co.e2)
+
 class Alignment :
+    """ """
     def __init__(self, query, Q_start, Q_end, T_start, T_end, length) :
         self.query = query
         self.Q_start = Q_start
@@ -31,6 +49,7 @@ class Alignment :
         self.length = length
 
 class FH :
+    """ """
     def __init__(self, query, targets, reference, paf, outdir, bed, cov, snps, templates) :
         self.paf = None
         self.query = None
@@ -111,7 +130,7 @@ def parseArgs() :
         parser.add_argument('PAF',nargs=1,type=str,help="An alignment .paf formatted")
         parser.add_argument('Query',nargs=1,type=str,help="A fasta file containing the target sequences")
         parser.add_argument('Reference',nargs=1,type=str,help="A fasta file containing the query sequences")
-        parser.add_argument('Targets',nargs=1,type=str,help="A .bed file containing the target contigs regions to plot")
+        parser.add_argument('BED',nargs=1,type=str,help="A .bed file containing the target contigs regions to plot")
         parser.add_argument('Output',nargs=1,type=str,help="A directory path")
         parser.add_argument('--templates','-t',nargs=1,required=False,type=str,default=[None],help="A directory path containing the template files")
         parser.add_argument('--min-length','-m',nargs=1,type=int,default=[1000],required=False,help="Minimum length. Default: 1000.")
@@ -186,16 +205,23 @@ def buildCorrespondance(reference, query) :
 def makeKaryotype(out, dAln, targets_to_plot, target_fasta, query_fasta, correspondance, contigs_lengths, min_align_length) :
     show_up_ideograms = ""
     karyotype = []
+    names = []
     o_t = open(os.path.join(out, "karyotype.txt"), "w")
+
     # Add each target line and its queries aligned to the karyotype
     for target in targets_to_plot :
         if target not in karyotype :
             karyotype.append(target)
+            names.append(target.name)
+            # Add target line to karyotype
+            chrom = "chr - {} {} 0 {} chr2".format(target.tag, target.name, target.length)
+            o_t.write(chrom+"\n")
         else :
             continue
+
         # Get the list of all long enough queries aligned to this target
         queries_aligned = []
-        for aln in dAln[target.name] :
+        for aln in dAln[target.name] : # For each alignment in dict of alignments
             if aln.length < min_align_length :
                 continue
 
@@ -224,42 +250,41 @@ def makeKaryotype(out, dAln, targets_to_plot, target_fasta, query_fasta, corresp
                 #print(aln.T_start, aln.T_end) # DEBUG
                 continue
 
-        # Add target line to karyotype
-        chrom = "chr - {} {} 0 {} chr2".format(target.tag, target.name, target.length)
-        o_t.write(chrom+"\n")
-
-        # Builds a show-up string to use in the template        
+        # Builds a show-up string to use in the template
         show_up_ideograms +=  ";" + target.tag + ":" + str(target.start) + "-" + str(target.end)
 
-        # Add queries lines to karyotype
-        for query in queries_aligned :
-            if query not in karyotype :
-                karyotype.append(query)
-            else :
-                continue
-            tag = correspondance[query]
-            query_length = contigs_lengths[query]
-            chrom = "chr - {} {} 0 {} chr4".format(tag, query, query_length)
-            o_t.write(chrom+"\n")
+    # Add queries lines to karyotype
+    for query in queries_aligned :
+        if query not in names :
+            names.append(query)
+        else :
+            continue # stop here
+        tag = correspondance[query]
+        query_length = contigs_lengths[query]
+        chrom = "chr - {} {} 0 {} chr4".format(tag, query, query_length)
+        o_t.write(chrom+"\n")
 
-            # Builds a show-up string to use in the template
-            show_up_ideograms += ";" + tag
+        # Builds a show-up string to use in the template
+        show_up_ideograms += ";" + tag
 
     o_t.close()
-    
+
     return show_up_ideograms
 
 def makeLinks(outdir, dAln, targets_to_plot, min_align_length, correspondance) :
     o_t = open(os.path.join(outdir, "links.txt"), "w")
+    # For self alignments: must remember coords and check if reverted
+    pairs = []
 	# All targets
     for p, target in enumerate(targets_to_plot) :
         for n, aln in enumerate(dAln[target.name]) :
             if aln.length < min_align_length :
                 continue
-            link1 = "link{} {} {} {}".format(str(p)+str(n), target.tag, aln.T_start, aln.T_end)
+            link1 = "link{} {} {} {}".format(str(p)+"_"+str(n), target.tag, aln.T_start, aln.T_end)
             o_t.write(link1+"\n")
-            link2 = "link{} {} {} {}".format(str(p)+str(n), correspondance[aln.query], aln.Q_start, aln.Q_end)
+            link2 = "link{} {} {} {}".format(str(p)+"_"+str(n), correspondance[aln.query], aln.Q_start, aln.Q_end)
             o_t.write(link2+"\n")
+            pairs.append(Coords(target.name, aln.T_start, aln.T_end, aln.query, aln.Q_start, aln.Q_end))
     o_t.close()
 
 def plotPAF(dAln, outdir, tpl, query_fasta, target_fasta, correspondance, min_align_length, contigs_lengths, targets_to_plot, bed=None, cov=None, snps=None) :
@@ -268,10 +293,12 @@ def plotPAF(dAln, outdir, tpl, query_fasta, target_fasta, correspondance, min_al
     print("Copying files...")
     for name in ["circos.conf", "ticks.conf", "ideogram.conf"] :
         shutil.copy(os.path.join(tpl, name), outdir)
+
     # 2. Make karyotype
     print("Building karyotype.txt...")
     show_up_ideograms = makeKaryotype(outdir, dAln, targets_to_plot, target_fasta, query_fasta, correspondance, contigs_lengths, min_align_length)
     replacePattern(os.path.join(outdir, "circos.conf"), "<CHROMOSOMES_WILL_GO_HERE>", show_up_ideograms[1:]) # [1:] used to remove the first ; char
+
     # 3. Make links
     print("Building links.txt...")
     makeLinks(outdir, dAln, targets_to_plot, min_align_length, correspondance)
@@ -364,7 +391,7 @@ def main() :
     args = parseArgs()
     templates = args.templates[0]
     query = args.Query[0]
-    targets = args.Targets[0]
+    targets = args.BED[0]
     reference = args.Reference[0]
     paf = args.PAF[0]
     bed = args.bed[0]
@@ -377,10 +404,13 @@ def main() :
 
     # Get useful dictionaries
     correspondance, contigs_lengths = buildCorrespondance(iFH.reference, iFH.query)
+
     # Get targets object list
     targets_to_plot = readTargets(iFH.targets, correspondance, contigs_lengths)
+
     # Extract alignments in the .paf if these are in the targets bed file
     dAlns = readPAF(iFH.paf, targets_to_plot)
+
     # Prepares files and circos plot
     plotPAF(dAlns, iFH.outdir, iFH.templates, iFH.query, iFH.reference, correspondance, min_len, contigs_lengths, targets_to_plot, bed=iFH.bed, cov=iFH.cov, snps=iFH.snps)
 
