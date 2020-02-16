@@ -363,7 +363,7 @@ def plotPAF(dAln, outdir, tpl, query_fasta, target_fasta, correspondance, min_al
 
     print("Adding circos formatted coverage...")
     if ccov != None :
-        shutil.copy(ccov, outdir)
+        shutil.copy(ccov, os.path.join(outdir, "circos_coverage.txt"))
     else :
         f = open(os.path.join(outdir, "circos_coverage.txt"), "w")
         f.close()
