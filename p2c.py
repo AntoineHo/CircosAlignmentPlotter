@@ -364,7 +364,7 @@ def plotPAF(dAln, outdir, tpl, query_fasta, target_fasta, correspondance, min_al
     print("Adding circos formatted coverage...")
     if ccov != None :
         f = open(os.path.join(outdir, "circos_coverage.txt"), "w")
-        for line in open(ccov, "") :
+        for line in open(ccov, "r") :
             s = line.strip().split()
             s[0] = correspondance[s[0]]
             f.write(" ".join(x for x in s) + "\n")
