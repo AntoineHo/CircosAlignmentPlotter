@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import datetime
 import argparse
+
 import pandas as pd
 import numpy as np
 from Bio import SeqIO # Need BIOPYTHON SEQ/IO
@@ -50,13 +51,14 @@ class Alignment :
 
 class FH :
     """ """
-    def __init__(self, query, targets, reference, paf, outdir, bed, cov, snps, templates) :
+    def __init__(self, query, targets, reference, paf, outdir, bed, scov, ccov, snps, templates) :
         self.paf = None
         self.query = None
         self.targets = None
         self.reference = None
         self.bed = None
-        self.cov = None
+        self.scov = None
+        self.ccov = None
         self.snps = None
         self.outdir = outdir
 
@@ -86,11 +88,17 @@ class FH :
             else :
                 raise Exception("ERROR: Highlights .bed file does not exist!")
 
-        if cov != None :
-            if os.path.isfile(cov) :
-                self.cov = os.path.abspath(cov)
+        if scov != None :
+            if os.path.isfile(scov) :
+                self.scov = os.path.abspath(scov)
             else :
-                raise Exception("ERROR: Coverage .cov file does not exist!")
+                raise Exception("ERROR: Coverage .cov file does not exist! {}".format(scov))
+
+        if ccov != None :
+            if os.path.isfile(ccov) :
+                self.ccov = os.path.abspath(ccov)
+            else :
+                raise Exception("ERROR: Coverage .cov file does not exist! {}".format(ccov))
 
         if snps != None :
             if os.path.isfile(snps) :
@@ -135,7 +143,8 @@ def parseArgs() :
         parser.add_argument('--templates','-t',nargs=1,required=False,type=str,default=[None],help="A directory path containing the template files")
         parser.add_argument('--min-length','-m',nargs=1,type=int,default=[1000],required=False,help="Minimum length. Default: 1000.")
         parser.add_argument('--bed','-b',nargs=1,type=str,default=[None],required=False,help="A .bed file with regions to highlight.")
-        parser.add_argument('--cov','-c',nargs=1,type=str,default=[None],required=False,help="A .cov file formatted like the output of samtools depth.")
+        parser.add_argument('--scov','-sc',nargs=1,type=str,default=[None],required=False,help="A file formatted like the output of samtools depth.")
+        parser.add_argument('--ccov','-cc',nargs=1,type=str,default=[None],required=False,help="A file formatted for circos.")
         parser.add_argument('--snps','-s',nargs=1,type=str,default=[None],required=False,help="A .vcf file of the query and/or target.")
         return parser.parse_args()
 
@@ -287,7 +296,7 @@ def makeLinks(outdir, dAln, targets_to_plot, min_align_length, correspondance) :
             pairs.append(Coords(target.name, aln.T_start, aln.T_end, aln.query, aln.Q_start, aln.Q_end))
     o_t.close()
 
-def plotPAF(dAln, outdir, tpl, query_fasta, target_fasta, correspondance, min_align_length, contigs_lengths, targets_to_plot, bed=None, cov=None, snps=None) :
+def plotPAF(dAln, outdir, tpl, query_fasta, target_fasta, correspondance, min_align_length, contigs_lengths, targets_to_plot, bed=None, scov=None, ccov=None, snps=None) :
     cwd = os.getcwd()
     # 1. Copy all template files into the subdir
     print("Copying files...")
@@ -330,9 +339,9 @@ def plotPAF(dAln, outdir, tpl, query_fasta, target_fasta, correspondance, min_al
         add_small_alignments(dAln, targets_to_plot, o_t, min_align_length, correspondance)
         o_t.close()
 
-    # OPTIONAL : add coverage information
-    print("Adding coverage...")
-    if cov != None :
+    # OPTIONAL : add coverage information formatted by samtools
+    print("Adding samtools formatted coverage...")
+    if scov != None :
         df = pd.read_csv(cov, sep="\t", usecols=["REF","POS","COV"])
         dfs = []
         for target in targets_to_plot :
@@ -349,10 +358,18 @@ def plotPAF(dAln, outdir, tpl, query_fasta, target_fasta, correspondance, min_al
         df_all = pd.concat(dfs, ignore_index=True)
         df_all.to_csv(os.path.join(outdir, "coverage.txt"), sep=" ", columns=["REF_first", "POS_min", "POS_max", "COV_mean"], index=False, header=False)
     else :
-        f = open(os.path.join(outdir, "coverage.txt"), "w")
+        f = open(os.path.join(outdir, "samtools_coverage.txt"), "w")
         f.close()
-    # OPTIONAL : add SNPs
 
+    print("Adding circos formatted coverage...")
+    if ccov != None :
+        shutil.copy(ccov, outdir)
+    else :
+        f = open(os.path.join(outdir, "circos_coverage.txt"), "w")
+        f.close()
+
+    # OPTIONAL : add SNPs
+    # TODO
 
     # 4. Run circos
     os.chdir(os.path.join(outdir))
@@ -395,11 +412,12 @@ def main() :
     reference = args.Reference[0]
     paf = args.PAF[0]
     bed = args.bed[0]
-    cov = args.cov[0]
+    scov = args.scov[0] # samtools formatted coverage
+    ccov = args.ccov[0] # circos formatted coverage
     snps = args.snps[0]
     outdir = args.Output[0]
     min_len = args.min_length[0]
-    iFH = FH(query, targets, reference, paf, outdir, bed, cov, snps, templates) # File handler
+    iFH = FH(query, targets, reference, paf, outdir, bed, scov, ccov, snps, templates) # File handler
     print(iFH)
 
     # Get useful dictionaries
@@ -412,7 +430,7 @@ def main() :
     dAlns = readPAF(iFH.paf, targets_to_plot)
 
     # Prepares files and circos plot
-    plotPAF(dAlns, iFH.outdir, iFH.templates, iFH.query, iFH.reference, correspondance, min_len, contigs_lengths, targets_to_plot, bed=iFH.bed, cov=iFH.cov, snps=iFH.snps)
+    plotPAF(dAlns, iFH.outdir, iFH.templates, iFH.query, iFH.reference, correspondance, min_len, contigs_lengths, targets_to_plot, bed=iFH.bed, scov=iFH.scov, ccov=iFH.ccov, snps=iFH.snps)
 
 if __name__ == '__main__':
         main()
