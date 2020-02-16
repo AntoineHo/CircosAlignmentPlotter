@@ -288,6 +288,8 @@ def makeLinks(outdir, dAln, targets_to_plot, min_align_length, correspondance) :
     pairs = []
 	# All targets
     for p, target in enumerate(targets_to_plot) :
+        if target.name not in dAln.keys() :
+            continue
         for n, aln in enumerate(dAln[target.name]) :
             if aln.length < min_align_length :
                 continue
@@ -393,6 +395,8 @@ def run(cmd) :
 
 def add_small_alignments(dAln, targets_to_plot, outfile, min_align_length, correspondance) :
     for target in targets_to_plot :
+        if target.name not in dAln.keys() :
+            continue
         for alignment in dAln[target.name] :
             if alignment.length > min_align_length :
                 continue
