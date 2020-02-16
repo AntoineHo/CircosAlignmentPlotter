@@ -230,6 +230,8 @@ def makeKaryotype(out, dAln, targets_to_plot, target_fasta, query_fasta, corresp
 
         # Get the list of all long enough queries aligned to this target
         queries_aligned = []
+        if target.name not in dAln.keys() :
+            continue
         for aln in dAln[target.name] : # For each alignment in dict of alignments
             if aln.length < min_align_length :
                 continue
