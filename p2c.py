@@ -169,7 +169,7 @@ def readTargets(targets, correspondance, contig_lengths) :
 
     return targets_to_plot
 
-def readPAF(paf, targets_to_plot) :
+def readPAF(paf, targets_to_plot, min_query_length, min_ref_length) :
     dAlignments = {}
     names_of_targets_to_plot = [t.name for t in targets_to_plot]
     f = open(paf)
@@ -178,12 +178,20 @@ def readPAF(paf, targets_to_plot) :
         target = s[5]
         if target not in names_of_targets_to_plot :
             continue
+        t_len = int(s[6])
         query = s[0]
+        q_len = int(s[1])
         q_start = int(s[2])
         q_end = int(s[3])
         t_start = int(s[7])
         t_end = int(s[8])
         length = int(s[10])
+
+        if t_len <= min_ref_length :
+            continue
+
+        if q_len <= min_query_length :
+            continue
 
         if target not in dAlignments.keys() :
             dAlignments[target] = [Alignment(query, q_start, q_end, t_start, t_end, length)]
@@ -453,7 +461,7 @@ def main() :
     targets_to_plot = readTargets(iFH.targets, correspondance, contigs_lengths)
 
     # Extract alignments in the .paf if these are in the targets bed file
-    dAlns = readPAF(iFH.paf, targets_to_plot)
+    dAlns = readPAF(iFH.paf, targets_to_plot, min_query_length, min_ref_length)
 
     # Prepares files and circos plot
     plotPAF(dAlns, iFH.outdir, iFH.templates, iFH.query, iFH.reference, correspondance, min_len, contigs_lengths, targets_to_plot, bed=iFH.bed, scov=iFH.scov, ccov=iFH.ccov, snps=iFH.snps)
