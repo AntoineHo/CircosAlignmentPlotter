@@ -141,7 +141,9 @@ def parseArgs() :
         parser.add_argument('BED',nargs=1,type=str,help="A .bed file containing the target contigs regions to plot")
         parser.add_argument('Output',nargs=1,type=str,help="A directory path")
         parser.add_argument('--templates','-t',nargs=1,required=False,type=str,default=[None],help="A directory path containing the template files")
-        parser.add_argument('--min-length','-m',nargs=1,type=int,default=[1000],required=False,help="Minimum length. Default: 1000.")
+        parser.add_argument('--min-length','-m',nargs=1,type=int,default=[1000],required=False,help="Minimum alignment length. Default: 1000.")
+        parser.add_argument('--min-query-length','-ql',nargs=1,type=int,default=[0],required=False,help="Minimum query length. Default: 0.")
+        parser.add_argument('--min-target-length','-tl',nargs=1,type=int,default=[0],required=False,help="Minimum target length. Default: 0.")
         parser.add_argument('--bed','-b',nargs=1,type=str,default=[None],required=False,help="A .bed file with regions to highlight.")
         parser.add_argument('--scov','-sc',nargs=1,type=str,default=[None],required=False,help="A file formatted like the output of samtools depth.")
         parser.add_argument('--ccov','-cc',nargs=1,type=str,default=[None],required=False,help="A file formatted for circos.")
@@ -190,23 +192,33 @@ def readPAF(paf, targets_to_plot) :
     f.close()
     return dAlignments
 
-def buildCorrespondance(reference, query) :
+def buildCorrespondance(reference, query, min_query_length, min_ref_length) :
     correspondance = {}
     contigs_lengths = {}
 
     n = 0
     for record in SeqIO.parse(reference, "fasta"):
+
+        length = len(record.seq)
+        if length <= min_ref_length :
+            continue
+
         if record.id not in correspondance :
             correspondance[record.id] = "av{}".format(n)
         if record.id not in contigs_lengths :
-            contigs_lengths[record.id] = len(record.seq)
+            contigs_lengths[record.id] = length
         n += 1
 
     for record in SeqIO.parse(query, "fasta"):
+
+        length = len(record.seq)
+        if length <= min_query_length :
+            continue
+
         if record.id not in correspondance :
             correspondance[record.id] = "av{}".format(n)
         if record.id not in contigs_lengths :
-            contigs_lengths[record.id] = len(record.seq)
+            contigs_lengths[record.id] = length
         n += 1
 
     return correspondance, contigs_lengths
@@ -429,11 +441,13 @@ def main() :
     snps = args.snps[0]
     outdir = args.Output[0]
     min_len = args.min_length[0]
+    min_query_length = args.min_query_length[0]
+    min_ref_length = args.min_target_length[0]
     iFH = FH(query, targets, reference, paf, outdir, bed, scov, ccov, snps, templates) # File handler
     print(iFH)
 
     # Get useful dictionaries
-    correspondance, contigs_lengths = buildCorrespondance(iFH.reference, iFH.query)
+    correspondance, contigs_lengths = buildCorrespondance(iFH.reference, iFH.query, min_query_length, min_ref_length)
 
     # Get targets object list
     targets_to_plot = readTargets(iFH.targets, correspondance, contigs_lengths)
