@@ -136,8 +136,8 @@ class FH :
 def parseArgs() :
         parser = argparse.ArgumentParser(description='Circos plot all alignments against each target in the .paf file.')
         parser.add_argument('PAF',nargs=1,type=str,help="An alignment .paf formatted")
-        parser.add_argument('Query',nargs=1,type=str,help="A fasta file containing the target sequences")
-        parser.add_argument('Reference',nargs=1,type=str,help="A fasta file containing the query sequences")
+        parser.add_argument('Query',nargs=1,type=str,help="A fasta file containing the query sequences")
+        parser.add_argument('Reference',nargs=1,type=str,help="A fasta file containing the target sequences")
         parser.add_argument('BED',nargs=1,type=str,help="A .bed file containing the target contigs regions to plot")
         parser.add_argument('Output',nargs=1,type=str,help="A directory path")
         parser.add_argument('--templates','-t',nargs=1,required=False,type=str,default=[None],help="A directory path containing the template files")
@@ -169,7 +169,7 @@ def readTargets(targets, correspondance, contig_lengths) :
 
     return targets_to_plot
 
-def readPAF(paf, targets_to_plot, min_query_length, min_ref_length) :
+def readPAF(paf, targets_to_plot, min_query_length, min_ref_length, correspondance) :
     dAlignments = {}
     names_of_targets_to_plot = [t.name for t in targets_to_plot]
     f = open(paf)
@@ -191,6 +191,9 @@ def readPAF(paf, targets_to_plot, min_query_length, min_ref_length) :
             continue
 
         if q_len <= min_query_length :
+            continue
+
+        if target not in correspondance.keys() or query not in correspondance.keys() :
             continue
 
         if target not in dAlignments.keys() :
@@ -461,7 +464,7 @@ def main() :
     targets_to_plot = readTargets(iFH.targets, correspondance, contigs_lengths)
 
     # Extract alignments in the .paf if these are in the targets bed file
-    dAlns = readPAF(iFH.paf, targets_to_plot, min_query_length, min_ref_length)
+    dAlns = readPAF(iFH.paf, targets_to_plot, min_query_length, min_ref_length, correspondance)
 
     # Prepares files and circos plot
     plotPAF(dAlns, iFH.outdir, iFH.templates, iFH.query, iFH.reference, correspondance, min_len, contigs_lengths, targets_to_plot, bed=iFH.bed, scov=iFH.scov, ccov=iFH.ccov, snps=iFH.snps)
