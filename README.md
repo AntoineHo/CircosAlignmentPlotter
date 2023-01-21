@@ -17,8 +17,8 @@ Circos plot all alignments against each target in the .paf file.
 
 positional arguments:
   PAF                   An alignment .paf formatted
-  Query                 A fasta file containing the target sequences
-  Reference             A fasta file containing the query sequences
+  Query                 A fasta file containing the query sequences
+  Reference             A fasta file containing the target sequences
   BED                   A .bed file containing the target contigs regions to plot
   Output                A directory path
 
