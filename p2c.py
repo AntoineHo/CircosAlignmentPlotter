@@ -51,7 +51,7 @@ class Alignment :
 
 class FH :
     """ """
-    def __init__(self, query, targets, reference, paf, outdir, bed, scov, ccov, snps, templates) :
+    def __init__(self, query, targets, reference, paf, outdir, bed, scov, ccov, snps, templates, log) :
         self.paf = None
         self.query = None
         self.targets = None
@@ -60,6 +60,7 @@ class FH :
         self.scov = None
         self.ccov = None
         self.snps = None
+        self.log = log
         self.outdir = outdir
 
         if os.path.isfile(paf) :
@@ -105,7 +106,7 @@ class FH :
                 self.snps = os.path.abspath(snps)
             else :
                 raise Exception("ERROR: SNPs .vcf file does not exist!")
-
+        
         if templates == None :
             self.templates = os.path.join(os.path.dirname(os.path.realpath(__file__)), "templates")
         else :
@@ -148,6 +149,7 @@ def parseArgs() :
         parser.add_argument('--scov','-sc',nargs=1,type=str,default=[None],required=False,help="A file formatted like the output of samtools depth.")
         parser.add_argument('--ccov','-cc',nargs=1,type=str,default=[None],required=False,help="A file formatted for circos.")
         parser.add_argument('--snps','-s',nargs=1,type=str,default=[None],required=False,help="A .vcf file of the query and/or target.")
+        parser.add_argument('--log','-l',nargs=1,type=str,default=[None],required=False,help="A .txt file for the log output of circos.")
         return parser.parse_args()
 
 def readTargets(targets, correspondance, contig_lengths) :
@@ -238,6 +240,7 @@ def makeKaryotype(out, dAln, targets_to_plot, target_fasta, query_fasta, corresp
     show_up_ideograms = ""
     karyotype = []
     names = []
+    #print("Correspondance:", correspondance)
     o_t = open(os.path.join(out, "karyotype.txt"), "w")
 
     # Add each target line and its queries aligned to the karyotype
@@ -305,7 +308,7 @@ def makeKaryotype(out, dAln, targets_to_plot, target_fasta, query_fasta, corresp
 
     return show_up_ideograms
 
-def makeLinks(outdir, dAln, targets_to_plot, min_align_length, correspondance) :
+def makeLinks(outdir, dAln, targets_to_plot, min_align_length, correspondance, show_up_ideograms) :
     o_t = open(os.path.join(outdir, "links.txt"), "w")
     # For self alignments: must remember coords and check if reverted
     pairs = []
@@ -314,7 +317,9 @@ def makeLinks(outdir, dAln, targets_to_plot, min_align_length, correspondance) :
         if target.name not in dAln.keys() :
             continue
         for n, aln in enumerate(dAln[target.name]) :
-            if aln.length < min_align_length :
+            if aln.length <= min_align_length :
+                continue
+            if correspondance[aln.query] not in show_up_ideograms:
                 continue
             link1 = "link{} {} {} {}".format(str(p)+"_"+str(n), target.tag, aln.T_start, aln.T_end)
             o_t.write(link1+"\n")
@@ -323,7 +328,7 @@ def makeLinks(outdir, dAln, targets_to_plot, min_align_length, correspondance) :
             pairs.append(Coords(target.name, aln.T_start, aln.T_end, aln.query, aln.Q_start, aln.Q_end))
     o_t.close()
 
-def plotPAF(dAln, outdir, tpl, query_fasta, target_fasta, correspondance, min_align_length, contigs_lengths, targets_to_plot, bed=None, scov=None, ccov=None, snps=None) :
+def plotPAF(dAln, outdir, tpl, query_fasta, target_fasta, correspondance, min_align_length, contigs_lengths, targets_to_plot, bed=None, scov=None, ccov=None, snps=None, log=None) :
     cwd = os.getcwd()
     # 1. Copy all template files into the subdir
     print("Copying files...")
@@ -337,7 +342,7 @@ def plotPAF(dAln, outdir, tpl, query_fasta, target_fasta, correspondance, min_al
 
     # 3. Make links
     print("Building links.txt...")
-    makeLinks(outdir, dAln, targets_to_plot, min_align_length, correspondance)
+    makeLinks(outdir, dAln, targets_to_plot, min_align_length, correspondance, show_up_ideograms)
 
     # OPTIONAL : make highlights
     print("Building highlights.txt...")
@@ -407,13 +412,19 @@ def plotPAF(dAln, outdir, tpl, query_fasta, target_fasta, correspondance, min_al
     # 4. Run circos
     os.chdir(os.path.join(outdir))
     cmd = "circos"
-    run(cmd)
+    run(cmd, log=log)
     os.chdir(cwd)
 
-def run(cmd) :
+def run(cmd, log=None) :
     print("Running circos in {}".format(os.getcwd()))
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    proc.communicate()
+    if log is not None:
+        flog = open(log, "w")
+        proc = subprocess.Popen(cmd, stdout=flog, stderr=flog)
+        proc.communicate()
+        flog.close()
+    else:
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        proc.communicate()
     print("Done!")
 
 def add_small_alignments(dAln, targets_to_plot, outfile, min_align_length, correspondance) :
@@ -454,7 +465,8 @@ def main() :
     min_len = args.min_length[0]
     min_query_length = args.min_query_length[0]
     min_ref_length = args.min_target_length[0]
-    iFH = FH(query, targets, reference, paf, outdir, bed, scov, ccov, snps, templates) # File handler
+    log = args.log[0]
+    iFH = FH(query, targets, reference, paf, outdir, bed, scov, ccov, snps, templates, log) # File handler
     print(iFH)
 
     # Get useful dictionaries
@@ -467,7 +479,7 @@ def main() :
     dAlns = readPAF(iFH.paf, targets_to_plot, min_query_length, min_ref_length, correspondance)
 
     # Prepares files and circos plot
-    plotPAF(dAlns, iFH.outdir, iFH.templates, iFH.query, iFH.reference, correspondance, min_len, contigs_lengths, targets_to_plot, bed=iFH.bed, scov=iFH.scov, ccov=iFH.ccov, snps=iFH.snps)
+    plotPAF(dAlns, iFH.outdir, iFH.templates, iFH.query, iFH.reference, correspondance, min_len, contigs_lengths, targets_to_plot, bed=iFH.bed, scov=iFH.scov, ccov=iFH.ccov, snps=iFH.snps, log=iFH.log)
 
 if __name__ == '__main__':
         main()
